@@ -102,10 +102,12 @@ public final class NetherPathfinderContext {
 
     public CompletableFuture<PathSegment> pathFindAsync(final BlockPos src, final BlockPos dst) {
         return CompletableFuture.supplyAsync(() -> {
+            final BlockPos safeSrc = clampNativeY(src);
+            final BlockPos safeDst = clampNativeY(dst);
             final PathSegment segment = NetherPathfinder.pathFind(
                     this.context,
-                    src.getX(), src.getY(), src.getZ(),
-                    dst.getX(), dst.getY(), dst.getZ(),
+                    safeSrc.getX(), safeSrc.getY(), safeSrc.getZ(),
+                    safeDst.getX(), safeDst.getY(), safeDst.getZ(),
                     true,
                     false,
                     10000,
@@ -116,6 +118,14 @@ public final class NetherPathfinderContext {
             }
             return segment;
         }, this.executor);
+    }
+
+    private static BlockPos clampNativeY(final BlockPos pos) {
+        final int y = Math.max(0, Math.min(127, pos.getY()));
+        if (y == pos.getY()) {
+            return pos;
+        }
+        return new BlockPos(pos.getX(), y, pos.getZ());
     }
 
     /**
