@@ -1506,6 +1506,16 @@ public final class Settings {
     public final Setting<Boolean> elytraPredictTerrain = new Setting<>(false);
 
     /**
+     * How far elytra pathing may go above the build height in non-nether dimensions.
+     */
+    public final Setting<Integer> elytraOverworldAndEndMaxHeightAboveBuildLimit = new Setting<>(100);
+
+    /**
+     * Preferred elytra flight height above the build height in non-nether dimensions.
+     */
+    public final Setting<Integer> elytraOverworldAndEndPreferredHeightAboveBuildLimit = new Setting<>(15);
+
+    /**
      * Automatically swap the current elytra with a new one when the durability gets too low
      */
     public final Setting<Boolean> elytraAutoSwap = new Setting<>(true);

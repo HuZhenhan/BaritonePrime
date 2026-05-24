@@ -61,6 +61,10 @@ import java.util.*;
 import static baritone.api.pathing.movement.ActionCosts.COST_INF;
 
 public class ElytraProcess extends BaritoneProcessHelper implements IBaritoneProcess, IElytraProcess, AbstractGameEventListener {
+    private static final int NETHER_MIN_Y = 0;
+    private static final int NETHER_MAX_Y = 128;
+    private static final int NETHER_DEFAULT_GOAL_Y = 64;
+
     public State state;
     private boolean goingToLandingSpot;
     private BetterBlockPos landingSpot;
@@ -322,8 +326,11 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     }
 
     private void pathTo0(BlockPos destination, boolean appendDestination) {
-        if (ctx.player() == null || ctx.player().level().dimension() != Level.NETHER) {
+        if (ctx.player() == null || ctx.world() == null) {
             return;
+        }
+        if (!appendDestination) {
+            validateDestinationY(destination.getY());
         }
         this.onLostControl();
         this.predictingTerrain = Baritone.settings().elytraPredictTerrain.value;
@@ -342,7 +349,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         if (iGoal instanceof GoalXZ) {
             GoalXZ goal = (GoalXZ) iGoal;
             x = goal.getX();
-            y = 64;
+            y = defaultGoalY();
             z = goal.getZ();
         } else if (iGoal instanceof GoalBlock) {
             GoalBlock goal = (GoalBlock) iGoal;
@@ -352,10 +359,47 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         } else {
             throw new IllegalArgumentException("The goal must be a GoalXZ or GoalBlock");
         }
-        if (y <= 0 || y >= 128) {
-            throw new IllegalArgumentException("The y of the goal is not between 0 and 128");
-        }
+        validateDestinationY(y);
         this.pathTo(new BlockPos(x, y, z));
+    }
+
+    private int defaultGoalY() {
+        if (isNether()) {
+            return NETHER_DEFAULT_GOAL_Y;
+        }
+
+        final int preferred = ctx.world().getMaxBuildHeight() + Baritone.settings().elytraOverworldAndEndPreferredHeightAboveBuildLimit.value;
+        return clamp(preferred, minAllowedY(), maxAllowedY());
+    }
+
+    private void validateDestinationY(int y) {
+        final int minY = minAllowedY();
+        final int maxY = maxAllowedY();
+        if (y < minY || y >= maxY) {
+            throw new IllegalArgumentException(String.format("The y of the goal is not between %d and %d", minY, maxY));
+        }
+    }
+
+    private boolean isNether() {
+        return ctx.world() != null && ctx.world().dimension() == Level.NETHER;
+    }
+
+    private int minAllowedY() {
+        if (isNether()) {
+            return NETHER_MIN_Y;
+        }
+        return ctx.world().getMinBuildHeight();
+    }
+
+    private int maxAllowedY() {
+        if (isNether()) {
+            return NETHER_MAX_Y;
+        }
+        return ctx.world().getMaxBuildHeight() + Math.max(0, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
+    }
+
+    private static int clamp(int value, int min, int maxExclusive) {
+        return Math.max(min, Math.min(value, maxExclusive - 1));
     }
 
     private boolean shouldLandForSafety() {
@@ -465,8 +509,8 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         }
     }
 
-    private static boolean isInBounds(BlockPos pos) {
-        return pos.getY() >= 0 && pos.getY() < 128;
+    private boolean isInBounds(BlockPos pos) {
+        return pos.getY() >= minAllowedY() && pos.getY() < maxAllowedY();
     }
 
     private boolean isSafeBlock(Block block) {
@@ -520,7 +564,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
 
     private BetterBlockPos checkLandingSpot(BlockPos pos, LongOpenHashSet checkedSpots) {
         BlockPos.MutableBlockPos mut = new BlockPos.MutableBlockPos(pos.getX(), pos.getY(), pos.getZ());
-        while (mut.getY() >= 0) {
+        while (mut.getY() >= minAllowedY()) {
             if (checkedSpots.contains(mut.asLong())) {
                 return null;
             }

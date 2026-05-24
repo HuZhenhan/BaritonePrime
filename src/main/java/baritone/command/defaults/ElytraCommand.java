@@ -33,7 +33,6 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.world.level.Level;
 
 import java.util.Arrays;
 import java.util.List;
@@ -70,9 +69,6 @@ public class ElytraCommand extends Command {
             Goal iGoal = customGoalProcess.mostRecentGoal();
             if (iGoal == null) {
                 throw new CommandInvalidStateException("No goal has been set");
-            }
-            if (ctx.world().dimension() != Level.NETHER) {
-                throw new CommandInvalidStateException("Only works in the nether");
             }
             try {
                 elytra.pathTo(iGoal);
@@ -128,7 +124,7 @@ public class ElytraCommand extends Command {
     private void gatekeep() {
         MutableComponent gatekeep = Component.literal("");
         gatekeep.append("To disable this message, enable the setting elytraTermsAccepted\n");
-        gatekeep.append("Baritone Elytra is an experimental feature. It is only intended for long distance travel in the Nether using fireworks for vanilla boost. It will not work with any other mods (\"hacks\") for non-vanilla boost. ");
+        gatekeep.append("Baritone Elytra is an experimental feature. It is intended for long distance travel using fireworks for vanilla boost. The Nether keeps its original height limits, while other dimensions use their own build height plus configurable elytra height settings. It will not work with any other mods (\"hacks\") for non-vanilla boost. ");
         MutableComponent gatekeep2 = Component.literal("If you want Baritone to attempt to take off from the ground for you, you can enable the elytraAutoJump setting (not advisable on laggy servers!). ");
         gatekeep2.setStyle(gatekeep2.getStyle().withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(Baritone.settings().prefix.value + "set elytraAutoJump true"))));
         gatekeep.append(gatekeep2);
@@ -202,7 +198,8 @@ public class ElytraCommand extends Command {
     @Override
     public List<String> getLongDesc() {
         return Arrays.asList(
-                "The elytra command tells baritone to, in the nether, automatically fly to the current goal.",
+                "The elytra command tells baritone to automatically fly to the current goal.",
+                "The Nether keeps its original 0-128 height range. Other dimensions use their own build height plus elytraOverworldAndEndMaxHeightAboveBuildLimit, and GoalXZ prefers elytraOverworldAndEndPreferredHeightAboveBuildLimit blocks above build height.",
                 "",
                 "Usage:",
                 "> elytra - fly to the current goal",
