@@ -370,8 +370,8 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         } else {
             throw new IllegalArgumentException("The goal must be a GoalXZ or GoalBlock");
         }
-        y = normalizeDestinationY(y);
-        this.pathTo(new BlockPos(x, y, z));
+        final int normalizedY = normalizeDestinationY(y);
+        this.pathTo(new BlockPos(x, normalizedY, z));
     }
 
     private int defaultGoalY() {
