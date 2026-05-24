@@ -80,6 +80,16 @@ public class ElytraCommand extends Command {
 
         final String action = args.getString();
         switch (action) {
+            case "vertical": {
+                Baritone.settings().elytraVerticalTakeoff.value = true;
+                logDirect("Enabled elytra vertical takeoff mode");
+                break;
+            }
+            case "old": {
+                Baritone.settings().elytraVerticalTakeoff.value = false;
+                logDirect("Disabled elytra vertical takeoff mode");
+                break;
+            }
             case "reset": {
                 elytra.resetState();
                 logDirect("Reset state but still flying to same goal");
@@ -185,7 +195,7 @@ public class ElytraCommand extends Command {
     public Stream<String> tabComplete(String label, IArgConsumer args) throws CommandException {
         TabCompleteHelper helper = new TabCompleteHelper();
         if (args.hasExactlyOne()) {
-            helper.append("reset", "repack", "supported");
+            helper.append("vertical", "old", "reset", "repack", "supported");
         }
         return helper.filterPrefix(args.getString()).stream();
     }

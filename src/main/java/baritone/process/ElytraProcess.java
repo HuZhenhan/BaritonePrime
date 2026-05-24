@@ -38,6 +38,7 @@ import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
 import baritone.pathing.movement.CalculationContext;
 import baritone.pathing.movement.movements.MovementFall;
+import net.minecraft.world.level.ClipContext;
 import baritone.process.elytra.ElytraBehavior;
 import baritone.process.elytra.NetherPathfinderContext;
 import baritone.process.elytra.NullElytraProcess;
@@ -54,6 +55,7 @@ import net.minecraft.world.level.block.AirBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
@@ -72,6 +74,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     private Goal goal;
     private ElytraBehavior behavior;
     private boolean predictingTerrain;
+    private boolean verticalTakeoffArmed;
 
     @Override
     public void onLostControl() {
@@ -80,6 +83,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         this.landingSpot = null;
         this.reachedGoal = false;
         this.goal = null;
+        this.verticalTakeoffArmed = false;
         destroyBehaviorAsync();
     }
 
@@ -276,7 +280,14 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
                 baritone.getPathingBehavior().secretInternalSegmentCancel();
             }
             baritone.getInputOverrideHandler().clearAllKeys();
+            this.verticalTakeoffArmed = false;
             if (ctx.player().fallDistance > 1.0f) {
+                if (Baritone.settings().elytraVerticalTakeoff.value && isVerticalTakeoffSpaceClear()) {
+                    Rotation rotations = ctx.playerRotations();
+                    // In Minecraft, looking up corresponds to pitch=-90
+                    baritone.getLookBehavior().updateTarget(new Rotation(rotations.getYaw(), -90), false);
+                    this.verticalTakeoffArmed = true;
+                }
                 baritone.getInputOverrideHandler().setInputForceState(Input.JUMP, true);
             }
         }
@@ -330,7 +341,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
             return;
         }
         if (!appendDestination) {
-            validateDestinationY(destination.getY());
+            destination = new BlockPos(destination.getX(), normalizeDestinationY(destination.getY()), destination.getZ());
         }
         this.onLostControl();
         this.predictingTerrain = Baritone.settings().elytraPredictTerrain.value;
@@ -359,7 +370,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         } else {
             throw new IllegalArgumentException("The goal must be a GoalXZ or GoalBlock");
         }
-        validateDestinationY(y);
+        y = normalizeDestinationY(y);
         this.pathTo(new BlockPos(x, y, z));
     }
 
@@ -372,12 +383,23 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         return clamp(preferred, minAllowedY(), maxAllowedY());
     }
 
-    private void validateDestinationY(int y) {
+    /**
+     * Native pathfinding only supports a limited Y range, so we normalize/clamp non-Nether values to prevent
+     * Invalid y1 or y2 crashes from the native library.
+     */
+    private int normalizeDestinationY(int y) {
         final int minY = minAllowedY();
-        final int maxY = maxAllowedY();
-        if (y < minY || y >= maxY) {
-            throw new IllegalArgumentException(String.format("The y of the goal is not between %d and %d", minY, maxY));
+        final int maxY = maxAllowedY(); // maxExclusive
+        if (y < minY) {
+            return minY;
         }
+        if (y >= maxY) {
+            if (isNether()) {
+                throw new IllegalArgumentException(String.format("The y of the goal is not between %d and %d", minY, maxY));
+            }
+            return maxY - 1;
+        }
+        return y;
     }
 
     private boolean isNether() {
@@ -388,14 +410,17 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         if (isNether()) {
             return NETHER_MIN_Y;
         }
-        return ctx.world().getMinBuildHeight();
+        // Native pathfinder expects y >= 0
+        return Math.max(ctx.world().getMinBuildHeight(), NETHER_MIN_Y);
     }
 
     private int maxAllowedY() {
         if (isNether()) {
             return NETHER_MAX_Y;
         }
-        return ctx.world().getMaxBuildHeight() + Math.max(0, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
+        // Native pathfinder expects y < 128
+        final int desiredMaxExclusive = ctx.world().getMaxBuildHeight() + Math.max(0, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
+        return Math.min(NETHER_MAX_Y, desiredMaxExclusive);
     }
 
     private static int clamp(int value, int min, int maxExclusive) {
@@ -422,6 +447,24 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         return false;
     }
 
+    private boolean isVerticalTakeoffSpaceClear() {
+        // Check that the space above the player's head is clear to avoid looking straight up into blocks.
+        if (ctx.world() == null || ctx.player() == null) {
+            return false;
+        }
+
+        final Vec3 start = ctx.playerHead();
+        final Vec3 end = start.add(0, 25, 0);
+        final HitResult hit = ctx.world().clip(new ClipContext(
+                start,
+                end,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                ctx.player()
+        ));
+        return hit.getType() == HitResult.Type.MISS;
+    }
+
     @Override
     public boolean isLoaded() {
         return true;
@@ -430,6 +473,18 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     @Override
     public boolean isSafeToCancel() {
         return !this.isActive() || !(this.state == State.FLYING || this.state == State.START_FLYING);
+    }
+
+    /**
+     * Whether this takeoff attempt has cleared the vertical takeoff ray and should force a single firework.
+     * This flag is consumed by the behavior layer (only once).
+     */
+    public boolean consumeVerticalTakeoffArmed() {
+        if (!this.verticalTakeoffArmed) {
+            return false;
+        }
+        this.verticalTakeoffArmed = false;
+        return true;
     }
 
     public enum State {

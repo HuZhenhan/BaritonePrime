@@ -742,6 +742,7 @@ public final class ElytraBehavior implements Helper {
         if (this.landingMode) {
             return;
         }
+        final boolean forceInitialFirework = this.remainingFireworkTicks <= 0 && this.process.consumeVerticalTakeoffArmed();
         final boolean useOnDescend = !Baritone.settings().elytraConserveFireworks.value || ctx.player().position().y < goingTo.y + 5;
         final double currentSpeed = new Vec3(
                 ctx.player().getDeltaMovement().x,
@@ -751,7 +752,7 @@ public final class ElytraBehavior implements Helper {
         ).lengthSqr();
 
         final double elytraFireworkSpeed = Baritone.settings().elytraFireworkSpeed.value;
-        if (this.remainingFireworkTicks <= 0 && (forceUseFirework || (!isBoosted
+        if (this.remainingFireworkTicks <= 0 && (forceUseFirework || forceInitialFirework || (!isBoosted
                 && useOnDescend
                 && (ctx.player().position().y < goingTo.y - 5 || start.distanceTo(new Vec3(goingTo.x + 0.5, ctx.player().position().y, goingTo.z + 0.5)) > 5) // UGH!!!!!!!
                 && currentSpeed < elytraFireworkSpeed * elytraFireworkSpeed))

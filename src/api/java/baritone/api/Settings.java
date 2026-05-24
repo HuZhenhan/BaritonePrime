@@ -1494,6 +1494,14 @@ public final class Settings {
     public final Setting<Boolean> elytraAutoJump = new Setting<>(false);
 
     /**
+     * When enabled, Elytra takeoff will try to go straight up:
+     * - On takeoff, look straight up (pitch=-90) only if the space above is clear.
+     * - Force a single firework at the takeoff tick to gain vertical height.
+     * You can toggle old behavior via {@code #elytra old}.
+     */
+    public final Setting<Boolean> elytraVerticalTakeoff = new Setting<>(true);
+
+    /**
      * The seed used to generate chunks for long distance elytra path-finding in the nether.
      * Defaults to 2b2t's nether seed.
      */
