@@ -93,7 +93,7 @@ public final class NetherPathfinderContext {
             if (ptr == 0) return; // this shouldn't ever happen
             event.getBlocks().forEach(pair -> {
                 BlockPos pos = pair.first();
-                if (pos.getY() >= 128) return;
+                if (!isNativeY(pos.getY())) return;
                 boolean isSolid = pair.second() != AIR_BLOCK_STATE;
                 Octree.setBlock(ptr, pos.getX() & 15, pos.getY(), pos.getZ() & 15, isSolid);
             });
@@ -118,6 +118,10 @@ public final class NetherPathfinderContext {
             }
             return segment;
         }, this.executor);
+    }
+
+    static boolean isNativeY(final int y) {
+        return (y | (127 - y)) >= 0;
     }
 
     private static BlockPos clampNativeY(final BlockPos pos) {
@@ -199,8 +203,12 @@ public final class NetherPathfinderContext {
     private static void writeChunkData(LevelChunk chunk, long ptr) {
         try {
             LevelChunkSection[] chunkInternalStorageArray = chunk.getSections();
-            for (int y0 = 0; y0 < 8; y0++) {
-                final LevelChunkSection extendedblockstorage = chunkInternalStorageArray[y0];
+            for (int sectionIndex = 0; sectionIndex < chunkInternalStorageArray.length; sectionIndex++) {
+                final int yBase = chunk.getMinBuildHeight() + (sectionIndex << 4);
+                if (yBase > 127 || yBase + 15 < 0) {
+                    continue;
+                }
+                final LevelChunkSection extendedblockstorage = chunkInternalStorageArray[sectionIndex];
                 if (extendedblockstorage == null) {
                     continue;
                 }
@@ -214,13 +222,16 @@ public final class NetherPathfinderContext {
                 int bitsPerEntry = array.getBits();
                 long maxEntryValue = (1L << bitsPerEntry) - 1L;
 
-                final int yReal = y0 << 4;
+                final int yReal = yBase;
                 for (int i = 0, idx = 0; i < longArray.length && idx < arraySize; ++i) {
                     long l = longArray[i];
                     for (int offset = 0; offset <= (64 - bitsPerEntry) && idx < arraySize; offset += bitsPerEntry, ++idx) {
+                        int y = yReal + (idx >> 8);
+                        if (!isNativeY(y)) {
+                            continue;
+                        }
                         int value = (int) ((l >> offset) & maxEntryValue);
                         int x = (idx & 15);
-                        int y = yReal + (idx >> 8);
                         int z = ((idx >> 4) & 15);
                         Octree.setBlock(ptr, x, y, z, value != airId);
                     }
