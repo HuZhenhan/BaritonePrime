@@ -23,10 +23,6 @@ pluginManagement {
             url = 'https://maven.wagyourtail.xyz/snapshots'
         }
         maven {
-            name = 'ForgeMaven'
-            url = 'https://maven.minecraftforge.net/'
-        }
-        maven {
             name = 'FabricMaven'
             url = 'https://maven.fabricmc.net/'
         }
