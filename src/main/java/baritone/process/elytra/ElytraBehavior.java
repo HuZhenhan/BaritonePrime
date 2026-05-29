@@ -633,6 +633,9 @@ public final class ElytraBehavior implements Helper {
         if (ctx.player().verticalCollision) {
             logVerbose("vbonk");
         }
+        if (tryNonNetherLandingDive()) {
+            return;
+        }
 
         final SolverContext solverContext = this.new SolverContext(false);
         this.solveNextTick = true;
@@ -660,7 +663,8 @@ public final class ElytraBehavior implements Helper {
             return;
         }
 
-        baritone.getLookBehavior().updateTarget(solution.rotation, false);
+        final Rotation glideRotation = nonNetherGlideRotation(solution);
+        baritone.getLookBehavior().updateTarget(glideRotation != null ? glideRotation : solution.rotation, false);
 
         if (!solution.solvedPitch) {
             logVerbose("no pitch solution, probably gonna crash in a few ticks LOL!!!");
@@ -779,6 +783,48 @@ public final class ElytraBehavior implements Helper {
         return solution;
     }
 
+    private boolean tryNonNetherLandingDive() {
+        if (!this.landingMode || isNether()) {
+            return false;
+        }
+        final List<BetterBlockPos> path = this.pathManager.getPath();
+        if (path.isEmpty()) {
+            return false;
+        }
+        final Vec3 start = ctx.player().position();
+        final Vec3 landing = path.getVec(path.size() - 1).add(0.5, 0.5, 0.5);
+        final double heightAboveLanding = start.y - landing.y;
+        if (heightAboveLanding <= Baritone.settings().elytraNonNetherLandingSlowdownHeight.value) {
+            return false;
+        }
+        final Vec3 horizontal = new Vec3(landing.x, start.y, landing.z);
+        if (start.distanceToSqr(horizontal) > 6 * 6 || !clearView(start, landing, false)) {
+            return false;
+        }
+        baritone.getLookBehavior().updateTarget(new Rotation(ctx.playerRotations().getYaw(), 90), false);
+        return true;
+    }
+
+    private Rotation nonNetherGlideRotation(final Solution solution) {
+        if (!shouldNonNetherGlide(solution)) {
+            return null;
+        }
+        return new Rotation(solution.rotation.getYaw(), Baritone.settings().elytraNonNetherGlidePitch.value);
+    }
+
+    private boolean shouldNonNetherGlide(final Solution solution) {
+        if (isNether() || this.landingMode || !Baritone.settings().elytraNonNetherGlide.value || solution == null || solution.goingTo == null) {
+            return false;
+        }
+        final double minY = ctx.world().getMaxBuildHeight() + Baritone.settings().elytraNonNetherGlideMinHeightAboveBuildLimit.value;
+        if (ctx.player().position().y < minY) {
+            return false;
+        }
+        final Vec3 finalDestination = solution.context.path.getVec(solution.context.path.size() - 1);
+        final double horizontalDistanceSq = ctx.player().position().subtract(finalDestination).multiply(1, 0, 1).lengthSqr();
+        return horizontalDistanceSq > 64 * 64;
+    }
+
     private void tickUseFireworks(final Vec3 start, final Vec3 goingTo, final boolean isBoosted, final boolean forceUseFirework) {
         if (this.remainingSetBackTicks > 0) {
             logDebug("waiting for elytraFireworkSetbackUseDelay: " + this.remainingSetBackTicks);
@@ -789,6 +835,7 @@ public final class ElytraBehavior implements Helper {
         }
         final boolean forceInitialFirework = this.remainingFireworkTicks <= 0 && this.process.consumeVerticalTakeoffArmed();
         final boolean useOnDescend = !Baritone.settings().elytraConserveFireworks.value || ctx.player().position().y < goingTo.y + 5;
+        final boolean suppressForNonNetherGlide = shouldSuppressFireworkForNonNetherGlide(goingTo, forceUseFirework, forceInitialFirework);
         final double currentSpeed = new Vec3(
                 ctx.player().getDeltaMovement().x,
                 // ignore y component if we are BOTH below where we want to be AND descending
@@ -797,7 +844,7 @@ public final class ElytraBehavior implements Helper {
         ).lengthSqr();
 
         final double elytraFireworkSpeed = Baritone.settings().elytraFireworkSpeed.value;
-        if (this.remainingFireworkTicks <= 0 && (forceUseFirework || forceInitialFirework || (!isBoosted
+        if (this.remainingFireworkTicks <= 0 && !suppressForNonNetherGlide && (forceUseFirework || forceInitialFirework || (!isBoosted
                 && useOnDescend
                 && (ctx.player().position().y < goingTo.y - 5 || start.distanceTo(new Vec3(goingTo.x + 0.5, ctx.player().position().y, goingTo.z + 0.5)) > 5) // UGH!!!!!!!
                 && currentSpeed < elytraFireworkSpeed * elytraFireworkSpeed))
@@ -815,6 +862,18 @@ public final class ElytraBehavior implements Helper {
             this.remainingFireworkTicks = 10;
             this.deployedFireworkLastTick = true;
         }
+    }
+
+    private boolean shouldSuppressFireworkForNonNetherGlide(final Vec3 goingTo, final boolean forceUseFirework, final boolean forceInitialFirework) {
+        if (forceUseFirework || forceInitialFirework || isNether() || this.landingMode || !Baritone.settings().elytraNonNetherGlide.value) {
+            return false;
+        }
+        final double minY = ctx.world().getMaxBuildHeight() + Baritone.settings().elytraNonNetherGlideMinHeightAboveBuildLimit.value;
+        if (ctx.player().position().y < minY) {
+            return false;
+        }
+        final Vec3 horizontalTarget = new Vec3(goingTo.x, ctx.player().position().y, goingTo.z);
+        return ctx.player().position().distanceToSqr(horizontalTarget) > 16 * 16;
     }
 
     private final class SolverContext {

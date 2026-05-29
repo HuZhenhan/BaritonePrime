@@ -90,6 +90,16 @@ public class ElytraCommand extends Command {
                 logDirect("Disabled elytra vertical takeoff mode");
                 break;
             }
+            case "glide": {
+                Baritone.settings().elytraNonNetherGlide.value = true;
+                logDirect("Enabled non-nether elytra glide mode");
+                break;
+            }
+            case "noglide": {
+                Baritone.settings().elytraNonNetherGlide.value = false;
+                logDirect("Disabled non-nether elytra glide mode");
+                break;
+            }
             case "reset": {
                 elytra.resetState();
                 logDirect("Reset state but still flying to same goal");
@@ -195,7 +205,7 @@ public class ElytraCommand extends Command {
     public Stream<String> tabComplete(String label, IArgConsumer args) throws CommandException {
         TabCompleteHelper helper = new TabCompleteHelper();
         if (args.hasExactlyOne()) {
-            helper.append("vertical", "old", "reset", "repack", "supported");
+            helper.append("vertical", "old", "glide", "noglide", "reset", "repack", "supported");
         }
         return helper.filterPrefix(args.getString()).stream();
     }
@@ -210,9 +220,12 @@ public class ElytraCommand extends Command {
         return Arrays.asList(
                 "The elytra command tells baritone to automatically fly to the current goal.",
                 "The Nether keeps its original 0-128 height range. Other dimensions use their own build height plus elytraOverworldAndEndMaxHeightAboveBuildLimit, and GoalXZ prefers elytraOverworldAndEndPreferredHeightAboveBuildLimit blocks above build height.",
+                "In non-nether dimensions, glide mode is enabled by default: it can coast at elytraNonNetherGlidePitch while safely above build height, and performs a faster vertical landing dive before switching back to normal landing control.",
                 "",
                 "Usage:",
                 "> elytra - fly to the current goal",
+                "> elytra glide - Enables non-nether glide mode.",
+                "> elytra noglide - Disables non-nether glide mode.",
                 "> elytra reset - Resets the state of the process, but will try to keep flying to the same goal.",
                 "> elytra repack - Queues all of the chunks in render distance to be given to the native library.",
                 "> elytra supported - Tells you if baritone ships a native library that is compatible with your PC."

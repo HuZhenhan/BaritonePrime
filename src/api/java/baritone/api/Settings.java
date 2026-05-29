@@ -1524,6 +1524,26 @@ public final class Settings {
     public final Setting<Integer> elytraOverworldAndEndPreferredHeightAboveBuildLimit = new Setting<>(15);
 
     /**
+     * In non-nether dimensions, allow controlled gliding between firework boosts while safely above build height.
+     */
+    public final Setting<Boolean> elytraNonNetherGlide = new Setting<>(true);
+
+    /**
+     * Pitch used for non-nether glide cruise while conserving fireworks.
+     */
+    public final Setting<Float> elytraNonNetherGlidePitch = new Setting<>(40.0F);
+
+    /**
+     * Minimum height above build limit required before non-nether glide may suppress firework use.
+     */
+    public final Setting<Integer> elytraNonNetherGlideMinHeightAboveBuildLimit = new Setting<>(12);
+
+    /**
+     * Height above the landing spot where non-nether fast landing switches back to normal landing control.
+     */
+    public final Setting<Integer> elytraNonNetherLandingSlowdownHeight = new Setting<>(28);
+
+    /**
      * Automatically swap the current elytra with a new one when the durability gets too low
      */
     public final Setting<Boolean> elytraAutoSwap = new Setting<>(true);
