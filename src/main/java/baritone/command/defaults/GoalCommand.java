@@ -21,12 +21,12 @@ import baritone.api.IBaritone;
 import baritone.api.command.Command;
 import baritone.api.command.argument.IArgConsumer;
 import baritone.api.command.datatypes.RelativeCoordinate;
-import baritone.api.command.datatypes.RelativeGoal;
 import baritone.api.command.exception.CommandException;
 import baritone.api.command.helpers.TabCompleteHelper;
 import baritone.api.pathing.goals.Goal;
 import baritone.api.process.ICustomGoalProcess;
 import baritone.api.utils.BetterBlockPos;
+import baritone.command.helpers.GoalListParser;
 
 import java.util.Arrays;
 import java.util.List;
@@ -50,11 +50,14 @@ public class GoalCommand extends Command {
                 logDirect("There was no goal to clear");
             }
         } else {
-            args.requireMax(3);
             BetterBlockPos origin = ctx.playerFeet();
-            Goal goal = args.getDatatypePost(RelativeGoal.INSTANCE, origin);
-            goalProcess.setGoal(goal);
-            logDirect(String.format("Goal: %s", goal.toString()));
+            List<Goal> goals = GoalListParser.parse(baritone.getCommandManager(), args, origin);
+            goalProcess.appendGoals(goals);
+            if (goals.size() == 1) {
+                logDirect(String.format("Goal added: %s", goals.get(0)));
+            } else {
+                logDirect(String.format("Added %d goals", goals.size()));
+            }
         }
     }
 

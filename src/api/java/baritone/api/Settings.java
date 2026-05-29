@@ -712,6 +712,21 @@ public final class Settings {
     public final Setting<Boolean> renderGoal = new Setting<>(true);
 
     /**
+     * Render queued goals after the current goal
+     */
+    public final Setting<Boolean> renderFutureGoals = new Setting<>(true);
+
+    /**
+     * Render order labels for queued goals after the current goal
+     */
+    public final Setting<Boolean> renderFutureGoalLabels = new Setting<>(true);
+
+    /**
+     * Sync the goal queue to XaeroPlus or Xaero waypoints when available
+     */
+    public final Setting<Boolean> syncGoalQueueToXaero = new Setting<>(true);
+
+    /**
      * Render the goal as a sick animated thingy instead of just a box
      * (also controls animation of GoalXZ if {@link #renderGoalXZBeacon} is enabled)
      */
@@ -851,6 +866,11 @@ public final class Settings {
      * The command prefix for chat control
      */
     public final Setting<String> prefix = new Setting<>("#");
+
+    /**
+     * Sync queued goals after the current goal to Xaero minimap integrations when available
+     */
+    public final Setting<Boolean> syncGoalQueueToXaero = new Setting<>(true);
 
     /**
      * Use a short Baritone prefix [B] instead of [Baritone] when logging to chat
@@ -1355,6 +1375,11 @@ public final class Settings {
      * The color of the goal box
      */
     public final Setting<Color> colorGoalBox = new Setting<>(Color.GREEN);
+
+    /**
+     * The color of queued goal boxes after the current goal
+     */
+    public final Setting<Color> colorFutureGoalBox = new Setting<>(Color.GRAY);
 
     /**
      * The color of the goal box when it's inverted

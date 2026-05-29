@@ -35,6 +35,7 @@ public final class DefaultCommands {
                 new CommandAlias(baritone, Arrays.asList("modified", "mod", "baritone", "modifiedsettings"), "List modified settings", "set modified"),
                 new CommandAlias(baritone, "reset", "Reset all settings or just one", "set reset"),
                 new GoalCommand(baritone),
+                new GoalsCommand(baritone),
                 new GotoCommand(baritone),
                 new PathCommand(baritone),
                 new ProcCommand(baritone),

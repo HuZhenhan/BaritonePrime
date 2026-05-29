@@ -38,3 +38,40 @@
      - `#elytra vertical`：启用垂直模式
      - `#elytra old`：切回旧模式
 
+---
+
+## 多目标点队列
+
+### 新增 / 变更点
+
+- `#goal` 现在支持队列：多次设置目标会追加到队尾，而不是覆盖旧目标。
+- 当前目标仍然是队列第 1 个，`#path`、`#goto`、`#elytra` 只会对当前目标启动一次行动。
+- 到达当前目标后，第 1 个目标会自动移除，第 2 个目标成为新的当前目标，但不会自动继续前往下一点。
+- 世界内渲染会保留当前目标的原颜色，后续目标使用灰色并显示 `#2`、`#3` 等顺序编号。
+- 安装 XaeroPlus / Xaero 时，会尝试把目标队列同步为小地图 waypoint；未安装或接口不可用时会静默退化，不影响 Baritone 自身渲染。
+
+### 坐标输入
+
+- 添加当前位置：`#goal`
+- 添加一个目标：`#goal 100 64 200`
+- 一次添加多个目标：`#goal 100 64 200, 150 70 250, 300 80 400`
+- 添加相对坐标组：`#goal ~ ~ ~, ~10 ~ ~-20`
+- 清空目标队列：`#goal clear`
+
+### 队列管理命令
+
+- 查看队列：`#goals list`
+- 追加目标：`#goals add 100 64 200, 150 70 250`
+- 设置第 3 个为当前目标：`#goals current 3`
+- 删除第 2 个：`#goals remove 2`
+- 上移第 4 个：`#goals up 4`
+- 下移第 2 个：`#goals down 2`
+- 清空队列：`#goals clear`
+- 撤销最近一次删除：`#goals undo`
+
+### 新增设置
+
+- `renderFutureGoals`（默认 `true`）：是否渲染当前目标之后的目标。
+- `renderFutureGoalLabels`（默认 `true`）：是否显示未来目标的顺序编号。
+- `colorFutureGoalBox`（默认灰色）：未来目标的渲染颜色。
+- `syncGoalQueueToXaero`（默认 `true`）：是否同步目标队列到 XaeroPlus / Xaero 小地图。

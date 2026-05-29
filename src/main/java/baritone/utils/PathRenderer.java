@@ -20,6 +20,7 @@ package baritone.utils;
 import baritone.api.BaritoneAPI;
 import baritone.api.event.events.RenderEvent;
 import baritone.api.pathing.goals.*;
+import baritone.api.process.GoalQueueEntry;
 import baritone.api.utils.BetterBlockPos;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.interfaces.IGoalRenderPos;
@@ -28,6 +29,8 @@ import baritone.pathing.path.PathExecutor;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BeaconRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -91,6 +94,7 @@ public final class PathRenderer implements IRenderer {
 
         if (goal != null && settings.renderGoal.value) {
             drawGoal(event.getModelViewStack(), ctx, goal, partialTicks, settings.colorGoalBox.value);
+            drawFutureGoals(event.getModelViewStack(), ctx, behavior.baritone.getCustomGoalProcess().getGoalQueue(), partialTicks);
         }
 
         if (!settings.renderPath.value) {
@@ -128,6 +132,66 @@ public final class PathRenderer implements IRenderer {
                 drawManySelectionBoxes(event.getModelViewStack(), ctx.player(), Collections.singletonList(mr.getDest()), settings.colorMostRecentConsidered.value);
             });
         });
+    }
+
+    private static void drawFutureGoals(PoseStack stack, IPlayerContext ctx, List<GoalQueueEntry> goalQueue, float partialTicks) {
+        if (!settings.renderFutureGoals.value || goalQueue.size() <= 1) {
+            return;
+        }
+        for (int i = 1; i < goalQueue.size(); i++) {
+            Goal goal = goalQueue.get(i).goal();
+            drawGoal(stack, ctx, goal, partialTicks, settings.colorFutureGoalBox.value);
+            if (settings.renderFutureGoalLabels.value) {
+                drawFutureGoalLabel(stack, ctx, goal, "#" + (i + 1));
+            }
+        }
+    }
+
+    private static void drawFutureGoalLabel(PoseStack stack, IPlayerContext ctx, Goal goal, String label) {
+        BlockPos pos = goalLabelPos(ctx, goal);
+        if (pos == null) {
+            return;
+        }
+        double x = pos.getX() + 0.5D - posX();
+        double y = pos.getY() + 2.35D - posY();
+        double z = pos.getZ() + 0.5D - posZ();
+
+        Font font = ctx.minecraft().font;
+        MultiBufferSource.BufferSource bufferSource = ctx.minecraft().renderBuffers().bufferSource();
+        stack.pushPose();
+        stack.translate(x, y, z);
+        stack.mulPose(ctx.minecraft().getEntityRenderDispatcher().cameraOrientation());
+        stack.scale(-0.025F, -0.025F, 0.025F);
+        float labelX = -font.width(label) / 2.0F;
+        font.drawInBatch(label, labelX, 0.0F, settings.colorFutureGoalBox.value.getRGB(), false, stack.last().pose(), bufferSource, Font.DisplayMode.SEE_THROUGH, 0, 15728880);
+        bufferSource.endBatch();
+        stack.popPose();
+    }
+
+    @Nullable
+    private static BlockPos goalLabelPos(IPlayerContext ctx, Goal goal) {
+        if (goal instanceof IGoalRenderPos) {
+            return ((IGoalRenderPos) goal).getGoalPos();
+        }
+        if (goal instanceof GoalXZ) {
+            GoalXZ goalXZ = (GoalXZ) goal;
+            return new BlockPos(goalXZ.getX(), ctx.playerFeet().y, goalXZ.getZ());
+        }
+        if (goal instanceof GoalYLevel) {
+            return new BlockPos(ctx.playerFeet().x, ((GoalYLevel) goal).level, ctx.playerFeet().z);
+        }
+        if (goal instanceof GoalComposite) {
+            for (Goal child : ((GoalComposite) goal).goals()) {
+                BlockPos pos = goalLabelPos(ctx, child);
+                if (pos != null) {
+                    return pos;
+                }
+            }
+        }
+        if (goal instanceof GoalInverted) {
+            return goalLabelPos(ctx, ((GoalInverted) goal).origin);
+        }
+        return null;
     }
 
     public static void drawPath(PoseStack stack, List<BetterBlockPos> positions, int startIndex, Color color, boolean fadeOut, int fadeStart0, int fadeEnd0) {

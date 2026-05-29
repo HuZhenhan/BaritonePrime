@@ -29,6 +29,7 @@ import baritone.behavior.*;
 import baritone.cache.WorldProvider;
 import baritone.command.manager.CommandManager;
 import baritone.event.GameEventHandler;
+import baritone.integration.minimap.GoalMinimapSyncBehavior;
 import baritone.process.*;
 import baritone.selection.SelectionManager;
 import baritone.utils.BlockStateInterface;
@@ -125,6 +126,8 @@ public class Baritone implements IBaritone {
             this.elytraProcess           = this.registerProcess(ElytraProcess::create);
             this.registerProcess(BackfillProcess::new);
         }
+
+        this.registerBehavior(GoalMinimapSyncBehavior::new);
 
         this.worldProvider = new WorldProvider(this);
         this.selectionManager = new SelectionManager(this);
