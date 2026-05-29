@@ -868,11 +868,6 @@ public final class Settings {
     public final Setting<String> prefix = new Setting<>("#");
 
     /**
-     * Sync queued goals after the current goal to Xaero minimap integrations when available
-     */
-    public final Setting<Boolean> syncGoalQueueToXaero = new Setting<>(true);
-
-    /**
      * Use a short Baritone prefix [B] instead of [Baritone] when logging to chat
      */
     public final Setting<Boolean> shortBaritonePrefix = new Setting<>(false);
