@@ -792,7 +792,8 @@ public final class ElytraBehavior implements Helper {
             return false;
         }
         final Vec3 start = ctx.player().position();
-        final Vec3 landing = path.getVec(path.size() - 1).add(0.5, 0.5, 0.5);
+        final BetterBlockPos landingPos = path.get(path.size() - 1);
+        final Vec3 landing = new Vec3(landingPos.x, landingPos.y, landingPos.z).add(0.5, 0.5, 0.5);
         final double heightAboveLanding = start.y - landing.y;
         if (heightAboveLanding <= Baritone.settings().elytraNonNetherLandingSlowdownHeight.value) {
             return false;
