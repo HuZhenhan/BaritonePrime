@@ -156,6 +156,14 @@ public final class ElytraBehavior implements Helper {
         return Math.max(ctx.world().getMaxBuildHeight() + 1, Math.min(preferred, maxExclusive - 1));
     }
 
+    private boolean shouldStartNonNetherApproachDescent(final Vec3 start, final Vec3 destination) {
+        if (isNether() || this.landingMode) {
+            return false;
+        }
+        final double horizontalDistanceSq = start.subtract(destination).multiply(1, 0, 1).lengthSqr();
+        return horizontalDistanceSq <= 96 * 96 && start.y > destination.y + 8;
+    }
+
     private UnpackedSegment highAltitudeSegment(BlockPos src, BlockPos dst) {
         final int y = nonNetherFlightY();
         return new UnpackedSegment(Stream.of(
@@ -685,6 +693,7 @@ public final class ElytraBehavior implements Helper {
         final NetherPath path = context.path;
         final int playerNear = landingMode ? path.size() - 1 : context.playerNear;
         final Vec3 start = context.start;
+        final Vec3 finalDestination = path.getVec(path.size() - 1);
         Solution solution = null;
 
         for (int relaxation = 0; relaxation < 3; relaxation++) { // try for a strict solution first, then relax more and more (if we're in a corner or near some blocks, it will have to relax its constraints a bit)
@@ -725,6 +734,8 @@ public final class ElytraBehavior implements Helper {
                     Vec3 dest = candidate.first().add(0, augment, 0);
                     if (landingMode) {
                         dest = dest.add(0.5, 0.5, 0.5);
+                    } else if (shouldStartNonNetherApproachDescent(start, finalDestination)) {
+                        dest = new Vec3(dest.x, Math.min(dest.y, finalDestination.y), dest.z);
                     }
 
                     if (augment != 0) {

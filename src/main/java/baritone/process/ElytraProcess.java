@@ -659,9 +659,57 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     }
 
     private static final int LANDING_COLUMN_HEIGHT = 15;
+    private static final int NON_NETHER_LANDING_SEARCH_RADIUS = 32;
     private Set<BetterBlockPos> badLandingSpots = new HashSet<>();
 
+    private BetterBlockPos findSafeLandingSpotInColumn(int x, int z, int startY, BlockStateInterface bsi) {
+        BetterBlockPos actualLandingSpot = checkLandingSpot(new BlockPos(x, startY, z), new LongOpenHashSet(), bsi);
+        if (actualLandingSpot == null) {
+            return null;
+        }
+        BetterBlockPos landingApproach = actualLandingSpot.above(LANDING_COLUMN_HEIGHT);
+        if (badLandingSpots.contains(landingApproach)) {
+            return null;
+        }
+        if (!isColumnAir(actualLandingSpot, LANDING_COLUMN_HEIGHT)) {
+            return null;
+        }
+        if (!hasAirBubble(landingApproach)) {
+            return null;
+        }
+        return landingApproach;
+    }
+
+    private BetterBlockPos findSafeLandingSpotNonNether(BetterBlockPos start) {
+        final BlockStateInterface bsi = new BlockStateInterface(ctx);
+        final int startY = Math.min(start.y, ctx.world().getMaxBuildHeight() - 1);
+
+        for (int radius = 0; radius <= NON_NETHER_LANDING_SEARCH_RADIUS; radius++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+                        continue;
+                    }
+                    final int x = start.x + dx;
+                    final int z = start.z + dz;
+                    final BlockPos columnTop = new BlockPos(x, startY, z);
+                    if (!ctx.world().isLoaded(columnTop)) {
+                        continue;
+                    }
+                    BetterBlockPos candidate = findSafeLandingSpotInColumn(x, z, startY, bsi);
+                    if (candidate != null) {
+                        return candidate;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     private BetterBlockPos findSafeLandingSpot(BetterBlockPos start) {
+        if (!isNether()) {
+            return findSafeLandingSpotNonNether(start);
+        }
         Queue<BetterBlockPos> queue = new PriorityQueue<>(Comparator.<BetterBlockPos>comparingInt(pos -> (pos.x - start.x) * (pos.x - start.x) + (pos.z - start.z) * (pos.z - start.z)).thenComparingInt(pos -> -pos.y));
         Set<BetterBlockPos> visited = new HashSet<>();
         LongOpenHashSet checkedPositions = new LongOpenHashSet();
