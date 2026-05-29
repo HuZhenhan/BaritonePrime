@@ -381,27 +381,32 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
             return NETHER_DEFAULT_GOAL_Y;
         }
 
-        final int preferred = ctx.world().getMaxBuildHeight() + Baritone.settings().elytraOverworldAndEndPreferredHeightAboveBuildLimit.value;
-        return clamp(preferred, minAllowedY(), maxAllowedY());
+        return nonNetherFlightY();
     }
 
     /**
-     * Native pathfinding only supports a limited Y range, so we normalize/clamp non-Nether values to prevent
-     * Invalid y1 or y2 crashes from the native library.
+     * Native pathfinding only supports a limited Y range in the Nether. Other dimensions use direct high-altitude
+     * routing, so their target Y can stay above the build limit.
      */
     private int normalizeDestinationY(int y) {
+        if (!isNether()) {
+            return Math.max(y, nonNetherFlightY());
+        }
         final int minY = minAllowedY();
         final int maxY = maxAllowedY(); // maxExclusive
         if (y < minY) {
             return minY;
         }
         if (y >= maxY) {
-            if (isNether()) {
-                throw new IllegalArgumentException(String.format("The y of the goal is not between %d and %d", minY, maxY));
-            }
-            return maxY - 1;
+            throw new IllegalArgumentException(String.format("The y of the goal is not between %d and %d", minY, maxY));
         }
         return y;
+    }
+
+    private int nonNetherFlightY() {
+        final int preferred = ctx.world().getMaxBuildHeight() + Baritone.settings().elytraOverworldAndEndPreferredHeightAboveBuildLimit.value;
+        final int maxExclusive = ctx.world().getMaxBuildHeight() + Math.max(1, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
+        return clamp(preferred, ctx.world().getMaxBuildHeight() + 1, maxExclusive);
     }
 
     private boolean isNether() {
@@ -420,9 +425,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         if (isNether()) {
             return NETHER_MAX_Y;
         }
-        // Native pathfinder expects y < 128
-        final int desiredMaxExclusive = ctx.world().getMaxBuildHeight() + Math.max(0, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
-        return Math.min(NETHER_MAX_Y, desiredMaxExclusive);
+        return ctx.world().getMaxBuildHeight() + Math.max(1, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
     }
 
     private static int clamp(int value, int min, int maxExclusive) {

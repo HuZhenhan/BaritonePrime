@@ -49,6 +49,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.Fireworks;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AirBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkSource;
@@ -63,6 +64,7 @@ import java.util.Queue;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import static baritone.utils.BaritoneMath.fastCeil;
 import static baritone.utils.BaritoneMath.fastFloor;
@@ -135,6 +137,32 @@ public final class ElytraBehavior implements Helper {
 
         this.context = new NetherPathfinderContext(Baritone.settings().elytraNetherSeed.value);
         this.boi = new BlockStateOctreeInterface(context);
+    }
+
+    private boolean isNether() {
+        return ctx.world() != null && ctx.world().dimension() == Level.NETHER;
+    }
+
+    private boolean hasLoadedPathContext(BlockPos pos) {
+        if (isNether()) {
+            return context.hasChunk(new ChunkPos(pos));
+        }
+        return ctx.world().isLoaded(pos);
+    }
+
+    private int nonNetherFlightY() {
+        final int preferred = ctx.world().getMaxBuildHeight() + Baritone.settings().elytraOverworldAndEndPreferredHeightAboveBuildLimit.value;
+        final int maxExclusive = ctx.world().getMaxBuildHeight() + Math.max(1, Baritone.settings().elytraOverworldAndEndMaxHeightAboveBuildLimit.value);
+        return Math.max(ctx.world().getMaxBuildHeight() + 1, Math.min(preferred, maxExclusive - 1));
+    }
+
+    private UnpackedSegment highAltitudeSegment(BlockPos src, BlockPos dst) {
+        final int y = nonNetherFlightY();
+        return new UnpackedSegment(Stream.of(
+                new BetterBlockPos(src.getX(), y, src.getZ()),
+                new BetterBlockPos(dst.getX(), y, dst.getZ()),
+                new BetterBlockPos(dst)
+        ), true);
     }
 
     public final class PathManager {
@@ -296,10 +324,16 @@ public final class ElytraBehavior implements Helper {
 
         // mickey resigned
         private CompletableFuture<Void> path0(BlockPos src, BlockPos dst, UnaryOperator<UnpackedSegment> operator) {
-            return ElytraBehavior.this.context.pathFindAsync(src, dst)
-                    .thenApply(UnpackedSegment::from)
+            return this.rawSegment(src, dst)
                     .thenApply(operator)
                     .thenAcceptAsync(this::setPath, ctx.minecraft()::execute);
+        }
+
+        private CompletableFuture<UnpackedSegment> rawSegment(BlockPos src, BlockPos dst) {
+            if (ElytraBehavior.this.isNether()) {
+                return ElytraBehavior.this.context.pathFindAsync(src, dst).thenApply(UnpackedSegment::from);
+            }
+            return CompletableFuture.completedFuture(ElytraBehavior.this.highAltitudeSegment(src, dst));
         }
 
         private void pathfindAroundObstacles() {
@@ -309,7 +343,7 @@ public final class ElytraBehavior implements Helper {
 
             int rangeStartIncl = playerNear;
             int rangeEndExcl = playerNear;
-            while (rangeEndExcl < path.size() && context.hasChunk(new ChunkPos(path.get(rangeEndExcl)))) {
+            while (rangeEndExcl < path.size() && ElytraBehavior.this.hasLoadedPathContext(path.get(rangeEndExcl))) {
                 rangeEndExcl++;
             }
             // rangeEndExcl now represents an index either not in the path, or just outside render distance
@@ -988,14 +1022,12 @@ public final class ElytraBehavior implements Helper {
                 bb.maxX + ox, bb.maxY + oy, bb.maxZ + oz,
         };
 
-        // Use non-batching method without early failure
-        if (Baritone.settings().elytraRenderHitboxRaytraces.value) {
+        if (Baritone.settings().elytraRenderHitboxRaytraces.value || !isNether()) {
             boolean clear = true;
             for (int i = 0; i < 8; i++) {
                 final Vec3 s = new Vec3(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
                 final Vec3 d = new Vec3(dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
-                // Don't forward ignoreLava since the batch call doesn't care about it
-                if (!this.clearView(s, d, false)) {
+                if (!this.clearView(s, d, ignoreLava)) {
                     clear = false;
                 }
             }
@@ -1007,11 +1039,12 @@ public final class ElytraBehavior implements Helper {
 
     public boolean clearView(Vec3 start, Vec3 dest, boolean ignoreLava) {
         final boolean clear;
-        if (!ignoreLava) {
+        if (!ignoreLava && isNether()) {
             // if start == dest then the cpp raytracer dies
             clear = start.equals(dest) || this.context.raytrace(start, dest);
         } else {
-            clear = ctx.world().clip(new ClipContext(start, dest, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.player())).getType() == HitResult.Type.MISS;
+            final ClipContext.Fluid fluidMode = ignoreLava ? ClipContext.Fluid.NONE : ClipContext.Fluid.ANY;
+            clear = ctx.world().clip(new ClipContext(start, dest, ClipContext.Block.COLLIDER, fluidMode, ctx.player())).getType() == HitResult.Type.MISS;
         }
 
         if (Baritone.settings().elytraRenderRaytraces.value) {
@@ -1266,12 +1299,14 @@ public final class ElytraBehavior implements Helper {
     }
 
     private boolean passable(int x, int y, int z, boolean ignoreLava) {
+        final BlockState state = this.bsi.get0(x, y, z);
         if (ignoreLava) {
-            final BlockState state = this.bsi.get0(x, y, z);
             return state.getBlock() instanceof AirBlock || MovementHelper.isLava(state);
-        } else {
-            return !this.boi.get0(x, y, z);
         }
+        if (!isNether()) {
+            return state.getBlock() instanceof AirBlock;
+        }
+        return !this.boi.get0(x, y, z);
     }
 
     private void tickInventoryTransactions() {
