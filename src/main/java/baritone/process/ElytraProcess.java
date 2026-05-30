@@ -164,8 +164,11 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
                 if (landingSpot != null) {
                     this.pathTo0(landingSpot, true);
                     this.landingSpot = landingSpot;
+                    this.goingToLandingSpot = true;
+                } else {
+                    // Don't transition into landing mode if we can't compute a safe spot.
+                    this.goingToLandingSpot = false;
                 }
-                this.goingToLandingSpot = true;
             }
 
             if (last != null && ctx.player().position().distanceToSqr(last.getCenter()) < 1) {
