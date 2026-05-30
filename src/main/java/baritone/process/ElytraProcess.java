@@ -77,6 +77,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     private ElytraBehavior behavior;
     private boolean predictingTerrain;
     private boolean verticalTakeoffArmed;
+    private long lastSafeLandingSpotSearchGameTime = Long.MIN_VALUE;
 
     @Override
     public void onLostControl() {
@@ -150,24 +151,31 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
             if (last != null && (ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
-                logDirect("Path complete, picking a nearby safe landing spot...");
-                BetterBlockPos landingSpot;
-                try {
-                    landingSpot = findSafeLandingSpot(ctx.playerFeet());
-                } catch (Throwable t) {
-                    // Elytra landing spot computation is best-effort. If it crashes (e.g. due to cached world state),
-                    // fall back to the existing behavior of continuing to orbit the last node.
-                    logDirect("elytra landing spot compute failed: " + t.getClass().getName() + ": " + t.getMessage());
-                    landingSpot = null;
-                }
-                // if this fails we will just keep orbiting the last node until we run out of rockets or the user intervenes
-                if (landingSpot != null) {
-                    this.pathTo0(landingSpot, true);
-                    this.landingSpot = landingSpot;
-                    this.goingToLandingSpot = true;
+                // Don't search a new landing spot immediately; wait until the player is close enough to the ground.
+                // This prevents repeated heavy computations and log spam while still in high-altitude approach.
+                if (!safetyLanding && !isGroundWithin(100)) {
+                    // Keep current behavior: continue orbiting the last node / approach path.
+                    // (Do not compute a landing spot yet, and do not spam logs.)
                 } else {
-                    // Don't transition into landing mode if we can't compute a safe spot.
-                    this.goingToLandingSpot = false;
+                    logDirect("Path complete, picking a nearby safe landing spot...");
+                    BetterBlockPos landingSpot;
+                    try {
+                        landingSpot = findSafeLandingSpot(ctx.playerFeet());
+                    } catch (Throwable t) {
+                        // Elytra landing spot computation is best-effort. If it crashes (e.g. due to cached world state),
+                        // fall back to the existing behavior of continuing to orbit the last node.
+                        logDirect("elytra landing spot compute failed: " + t.getClass().getName() + ": " + t.getMessage());
+                        landingSpot = null;
+                    }
+                    // if this fails we will just keep orbiting the last node until we run out of rockets or the user intervenes
+                    if (landingSpot != null) {
+                        this.pathTo0(landingSpot, true);
+                        this.landingSpot = landingSpot;
+                        this.goingToLandingSpot = true;
+                    } else {
+                        // Don't transition into landing mode if we can't compute a safe spot.
+                        this.goingToLandingSpot = false;
+                    }
                 }
             }
 
@@ -691,6 +699,26 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     private static final int NON_NETHER_LANDING_SEARCH_RADIUS = 32;
     private Set<BetterBlockPos> badLandingSpots = new HashSet<>();
 
+    /**
+     * Whether the nearest solid ground/block collision is within the next {@code maxDistance} blocks down.
+     * Used to delay expensive landing-spot computation until we're close enough to the ground.
+     */
+    private boolean isGroundWithin(int maxDistance) {
+        if (ctx.world() == null || ctx.player() == null || maxDistance <= 0) {
+            return false;
+        }
+        Vec3 from = ctx.player().position();
+        Vec3 to = from.add(0, -maxDistance, 0);
+        HitResult hit = ctx.world().clip(new ClipContext(
+                from,
+                to,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                ctx.player()
+        ));
+        return hit.getType() != HitResult.Type.MISS;
+    }
+
     private BetterBlockPos findSafeLandingSpotInColumn(int x, int z, int startY, BlockStateInterface bsi) {
         BetterBlockPos actualLandingSpot = checkLandingSpot(new BlockPos(x, startY, z), new LongOpenHashSet(), bsi);
         if (actualLandingSpot == null) {
@@ -736,6 +764,27 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
             }
         }
         return null;
+    }
+
+    /**
+     * Best-effort distance from the player's feet to the first solid collision block below.
+     * Returns Double.POSITIVE_INFINITY if we can't reliably compute it.
+     */
+    private double distanceToGround(final Vec3 start) {
+        try {
+            // Search slightly beyond the 100-block threshold so that small float error won't
+            // accidentally prevent the landing spot computation.
+            final double maxRayDistance = 101.0D;
+            final Vec3 end = start.add(0, -maxRayDistance, 0);
+            final HitResult hit = ctx.world().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.player()));
+            if (hit.getType() == HitResult.Type.MISS) {
+                return Double.POSITIVE_INFINITY;
+            }
+            return Math.max(0.0D, start.y - hit.getLocation().y);
+        } catch (Throwable t) {
+            // If raytracing fails for any reason, be conservative and skip landing spot searching.
+            return Double.POSITIVE_INFINITY;
+        }
     }
 
     private BetterBlockPos findSafeLandingSpot(BetterBlockPos start) {
