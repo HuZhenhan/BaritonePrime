@@ -14,7 +14,7 @@
 - 兼容性修复：由于原生寻路库在非下界维度仅支持有限 Y 范围，当目标/落点 Y 超出范围时会自动夹紧到支持范围，避免 `Invalid y1 or y2` 崩溃。
 - 新增：Elytra 垂直起飞模式（默认启用）
   - 新增子命令：`#elytra vertical` / `#elytra old` 切换垂直/旧起飞逻辑
-  - 若玩家头部正上方 25 格内无方块碰撞，则在起飞瞬间抬头 pitch=-90，并在同一刻强制使用 1 发烟花实现垂直起飞；否则回退到旧起飞逻辑
+  - 若玩家头部正上方 25 格内无方块碰撞，则在起飞瞬间抬头 pitch=-90，并在同一刻强制使用 1  发烟花实现垂直起飞；否则回退到旧起飞逻辑
 - 迁移参考（本次还涉及新增文件/逻辑）：`src/api/java/baritone/api/Settings.java`、`src/main/java/baritone/command/defaults/ElytraCommand.java`、`src/main/java/baritone/process/ElytraProcess.java`、`src/main/java/baritone/process/elytra/ElytraBehavior.java`
 
 迁移参考（本次涉及文件）：
