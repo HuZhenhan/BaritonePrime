@@ -51,6 +51,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkSource;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -805,21 +806,46 @@ public final class ElytraBehavior implements Helper {
         if (isNether()) {
             return false;
         }
-        final List<BetterBlockPos> path = this.pathManager.getPath();
-        if (path.isEmpty()) {
+        BetterBlockPos ground = nearestNonNetherSafeGroundBelow(ctx.playerFeet());
+        if (ground == null) {
             return false;
         }
-        final Vec3 start = ctx.player().position();
-        final BetterBlockPos landingPos = path.get(path.size() - 1);
-        final Vec3 landing = new Vec3(landingPos.x, landingPos.y, landingPos.z).add(0.5, 0.5, 0.5);
-        final double heightAboveLanding = start.y - landing.y;
-        final double slowdownDistance = 30.0;
-        if (heightAboveLanding <= slowdownDistance) {
+        final double heightAboveGround = ctx.player().position().y - (ground.y + 1.0D);
+        final double slowdownDistance = 45.0D;
+        if (heightAboveGround <= slowdownDistance) {
             return false;
         }
-        this.aimPos = landingPos;
+        this.aimPos = ground;
         baritone.getLookBehavior().updateTarget(new Rotation(ctx.playerRotations().getYaw(), 90), false);
         return true;
+    }
+
+    private BetterBlockPos nearestNonNetherSafeGroundBelow(final BetterBlockPos start) {
+        if (ctx.world() == null || start == null) {
+            return null;
+        }
+        final BlockStateInterface bsi = new BlockStateInterface(ctx);
+        final int minY = ctx.world().getMinBuildHeight();
+        final int maxY = Math.min(start.y, ctx.world().getMaxBuildHeight() - 1);
+        for (int y = maxY; y >= minY; y--) {
+            final BlockPos pos = new BlockPos(start.x, y, start.z);
+            if (!ctx.world().isLoaded(pos)) {
+                continue;
+            }
+            final BlockState state = ctx.world().getBlockState(pos);
+            if (!Block.isShapeFullBlock(state.getCollisionShape(ctx.world(), pos))) {
+                continue;
+            }
+            if (!MovementHelper.canWalkOn(bsi, pos.getX(), pos.getY(), pos.getZ(), state)) {
+                continue;
+            }
+            if (!MovementHelper.canWalkThrough(bsi, pos.getX(), pos.getY() + 1, pos.getZ())
+                    || !MovementHelper.canWalkThrough(bsi, pos.getX(), pos.getY() + 2, pos.getZ())) {
+                continue;
+            }
+            return new BetterBlockPos(pos);
+        }
+        return null;
     }
 
     private Rotation nonNetherGlideRotation(final Solution solution) {

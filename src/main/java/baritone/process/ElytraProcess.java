@@ -140,17 +140,11 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
         }
 
         boolean safetyLanding = false;
-        if (ctx.player().isFallFlying() && shouldLandForSafety()) {
-            if (Baritone.settings().elytraAllowEmergencyLand.value) {
-                logDirect("Emergency landing - almost out of elytra durability or fireworks");
-                safetyLanding = true;
-            } else {
-                logDirect("almost out of elytra durability or fireworks, but I'm going to continue since elytraAllowEmergencyLand is false");
-            }
-        }
-        if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding)) {
+        final boolean closeToGround = !isNether() && this.distanceToNearestNonNetherSafeGround(ctx.playerFeet().getCenter()) <= 45;
+        if (ctx.player().isFallFlying() && this.state != State.LANDING && (this.behavior.pathManager.isComplete() || safetyLanding || closeToGround)) {
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
-            if (last != null && (ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
+            final boolean closeToFinalPathNode = last != null && ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48);
+            if (last != null && (closeToFinalPathNode || safetyLanding || closeToGround) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 if (ctx.world().getGameTime() - lastSafeLandingSpotSearchGameTime >= 20) {
                     lastSafeLandingSpotSearchGameTime = ctx.world().getGameTime();
                     logDirect("Path complete, picking a nearby safe landing spot...");
@@ -609,10 +603,43 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
     private boolean isSafeBlock(BlockPos pos, BlockStateInterface bsi) {
         BlockState state = safeGetBlockState(pos, bsi);
         if (!isNether()) {
-            return MovementHelper.canWalkOn(bsi, pos.getX(), pos.getY(), pos.getZ(), state);
+            return isFullSafeNonNetherGround(pos, bsi, state);
         }
         Block block = state.getBlock();
         return block == Blocks.NETHERRACK || block == Blocks.GRAVEL || (block == Blocks.NETHER_BRICKS && Baritone.settings().elytraAllowLandOnNetherFortress.value);
+    }
+
+    private boolean isFullSafeNonNetherGround(BlockPos pos, BlockStateInterface bsi, BlockState state) {
+        if (ctx.world() == null || pos == null) {
+            return false;
+        }
+        if (!Block.isShapeFullBlock(state.getCollisionShape(ctx.world(), pos))) {
+            return false;
+        }
+        return MovementHelper.canWalkOn(bsi, pos.getX(), pos.getY(), pos.getZ(), state)
+                && MovementHelper.canWalkThrough(bsi, pos.getX(), pos.getY() + 1, pos.getZ())
+                && MovementHelper.canWalkThrough(bsi, pos.getX(), pos.getY() + 2, pos.getZ());
+    }
+
+    private double distanceToNearestNonNetherSafeGround(final Vec3 start) {
+        if (isNether() || !canReadBlocks() || start == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+        final BlockStateInterface bsi = new BlockStateInterface(ctx);
+        final int x = (int) Math.floor(start.x);
+        final int z = (int) Math.floor(start.z);
+        final int maxY = Math.min((int) Math.floor(start.y), ctx.world().getMaxBuildHeight() - 1);
+        for (int y = maxY; y >= ctx.world().getMinBuildHeight(); y--) {
+            final BlockPos pos = new BlockPos(x, y, z);
+            if (!ctx.world().isLoaded(pos)) {
+                continue;
+            }
+            final BlockState state = safeGetBlockState(pos, bsi);
+            if (isFullSafeNonNetherGround(pos, bsi, state)) {
+                return Math.max(0.0D, start.y - (y + 1.0D));
+            }
+        }
+        return Double.POSITIVE_INFINITY;
     }
 
     private boolean isSafeBlock(BlockPos pos) {

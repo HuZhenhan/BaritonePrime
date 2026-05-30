@@ -19,10 +19,9 @@ package baritone.api.command.datatypes;
 
 import baritone.api.command.argument.IArgConsumer;
 import baritone.api.command.exception.CommandException;
+import baritone.api.command.exception.CommandTooManyArgumentsException;
 import baritone.api.pathing.goals.Goal;
 import baritone.api.pathing.goals.GoalBlock;
-import baritone.api.pathing.goals.GoalXZ;
-import baritone.api.pathing.goals.GoalYLevel;
 import baritone.api.utils.BetterBlockPos;
 
 import java.util.stream.Stream;
@@ -37,24 +36,19 @@ public enum RelativeGoal implements IDatatypePost<Goal, BetterBlockPos> {
         }
 
         final IArgConsumer consumer = ctx.getConsumer();
-
-        GoalBlock goalBlock = consumer.peekDatatypePostOrNull(RelativeGoalBlock.INSTANCE, origin);
-        if (goalBlock != null) {
-            return goalBlock;
+        if (!consumer.hasAny()) {
+            return new GoalBlock(origin.x, origin.y, origin.z);
         }
-
-        GoalXZ goalXZ = consumer.peekDatatypePostOrNull(RelativeGoalXZ.INSTANCE, origin);
-        if (goalXZ != null) {
-            return goalXZ;
+        if (consumer.hasExactly(1)) {
+            return consumer.getDatatypePost(RelativeGoalYLevel.INSTANCE, origin);
         }
-
-        GoalYLevel goalYLevel = consumer.peekDatatypePostOrNull(RelativeGoalYLevel.INSTANCE, origin);
-        if (goalYLevel != null) {
-            return goalYLevel;
+        if (consumer.hasExactly(2)) {
+            return consumer.getDatatypePost(RelativeGoalXZ.INSTANCE, origin);
         }
-
-        // when the user doesn't input anything, default to the origin
-        return new GoalBlock(origin);
+        if (consumer.hasExactly(3)) {
+            return consumer.getDatatypePost(RelativeGoalBlock.INSTANCE, origin);
+        }
+        throw new CommandTooManyArgumentsException(3);
     }
 
     @Override
