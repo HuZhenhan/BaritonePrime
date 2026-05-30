@@ -153,7 +153,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
             if (last != null && (ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 // Don't search a new landing spot immediately; wait until the player is close enough to the ground.
                 // This prevents repeated heavy computations and log spam while still in high-altitude approach.
-                if (this.distanceToGround(ctx.playerFeet()) > 100) {
+                if (this.distanceToGround(ctx.playerFeet().getCenter()) > 100) {
                     // Keep current behavior: continue orbiting the last node / approach path.
                     // (Do not compute a landing spot yet, and do not spam logs.)
                 } else {
