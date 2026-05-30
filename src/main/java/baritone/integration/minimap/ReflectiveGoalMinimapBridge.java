@@ -17,14 +17,50 @@ import net.minecraft.core.BlockPos;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
 abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
 
+    // Maps queue-entry id → waypoint object for stable per-id removal
+    private final java.util.Map<Long, Object> waypointById = new java.util.LinkedHashMap<>();
     private final List<Object> createdWaypoints = new ArrayList<>();
     private Object waypointSet;
     private String lastSignature = "";
+
+    private static void dbg(String hypothesisId, String location, String message, String dataJson) {
+        try {
+            long timestamp = System.currentTimeMillis();
+            String safeMessage = message == null ? "" : message.replace("\\", "\\\\").replace("\"", "\\\"");
+            String safeLocation = location == null ? "" : location.replace("\\", "\\\\").replace("\"", "\\\"");
+            String safeHyp = hypothesisId == null ? "" : hypothesisId.replace("\\", "\\\\").replace("\"", "\\\"");
+            String safeData = dataJson == null ? "null" : dataJson;
+            String json = "{"
+                    + "\"sessionId\":\"da64ea\","
+                    + "\"runId\":\"debug\","
+                    + "\"hypothesisId\":\"" + safeHyp + "\","
+                    + "\"location\":\"" + safeLocation + "\","
+                    + "\"message\":\"" + safeMessage + "\","
+                    + "\"data\":" + safeData + ","
+                    + "\"timestamp\":" + timestamp
+                    + "}\n";
+
+            URL url = new URL("http://127.0.0.1:7359/ingest/56767ac9-a301-457c-bae6-3d2f400d39b2");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("X-Debug-Session-Id", "da64ea");
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            conn.getResponseCode();
+        } catch (Exception ignored) {
+        }
+    }
 
     @Override
     public final void sync(Baritone baritone, List<GoalQueueEntry> goalQueue) {
@@ -35,7 +71,17 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
                 return;
             }
             String signature = System.identityHashCode(currentWaypointSet) + ":" + queueSignature(baritone.getPlayerContext(), goalQueue);
-            if (signature.equals(this.lastSignature)) {
+            boolean skip = signature.equals(this.lastSignature);
+            // #region agent log
+            dbg(
+                    "H2",
+                    "ReflectiveGoalMinimapBridge.sync",
+                    skip ? "bridge_skip_due_signature" : "bridge_rebuild_due_signature_change",
+                    "{\"signature\":\"" + signature.replace("\\", "\\\\").replace("\"", "\\\"") + "\","
+                            + "\"lastSignature\":\"" + (this.lastSignature == null ? "" : this.lastSignature.replace("\\", "\\\\").replace("\"", "\\\"")) + "\"}"
+            );
+            // #endregion
+            if (skip) {
                 return;
             }
             clearFromSet(this.waypointSet);
@@ -49,12 +95,42 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
     }
 
     @Override
+    public final void removeById(long id) {
+        // #region agent log
+        dbg("H3", "ReflectiveGoalMinimapBridge.removeById", "called", "{\"id\":" + id + "}");
+        // #endregion
+        try {
+            if (this.waypointSet == null) {
+                return;
+            }
+            Object waypoint = this.waypointById.remove(id);
+            if (waypoint == null) {
+                return;
+            }
+
+            Method remove = this.waypointSet.getClass().getMethod("remove", waypointClass());
+            remove.invoke(this.waypointSet, waypoint);
+            this.createdWaypoints.remove(waypoint);
+            refreshWaypoints();
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Fallback: inconsistent state will be corrected on next sync().
+        }
+    }
+
+    @Override
+    public final void refresh(Baritone baritone, List<GoalQueueEntry> goalQueue) {
+        clear();
+        sync(baritone, goalQueue);
+    }
+
+    @Override
     public final void clear() {
         try {
             clearFromSet(this.waypointSet);
             refreshWaypoints();
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             this.createdWaypoints.clear();
+            this.waypointById.clear();
         }
         this.waypointSet = null;
         this.lastSignature = "";
@@ -62,7 +138,8 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
 
     protected abstract int firstSyncedIndex();
 
-    protected abstract Object createWaypoint(int x, int y, int z, String name, String initials) throws ReflectiveOperationException;
+    protected abstract Object createWaypoint(int x, int y, int z, String name, String initials, boolean isCurrentGoal)
+            throws ReflectiveOperationException;
 
     protected Class<?> waypointClass() throws ClassNotFoundException {
         return Class.forName("xaero.common.minimap.waypoints.Waypoint");
@@ -70,16 +147,21 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
 
     private void addQueueWaypoints(IPlayerContext ctx, Object waypointSet, List<GoalQueueEntry> goalQueue) throws ReflectiveOperationException {
         int firstIndex = firstSyncedIndex();
-        for (int i = firstIndex; i < goalQueue.size(); i++) {
-            BlockPos pos = goalPos(ctx, goalQueue.get(i).goal());
+        for (int queueIndex = 0; queueIndex < goalQueue.size(); queueIndex++) {
+            GoalQueueEntry entry = goalQueue.get(queueIndex);
+            int signedIndex = firstIndex + queueIndex;
+
+            BlockPos pos = goalPos(ctx, entry.goal());
             if (pos == null) {
                 continue;
             }
-            int order = i + 1;
-            String name = firstIndex == 0 && i == 0 ? "Baritone Goal" : "Baritone Queue #" + order;
-            String initials = firstIndex == 0 && i == 0 ? "B" : "B" + order;
-            Object waypoint = createWaypoint(pos.getX(), pos.getY(), pos.getZ(), name, initials);
+            String name = "Baritone Goal";
+            String initials = "B";
+            boolean isCurrentGoal = signedIndex == firstIndex;
+            Object waypoint = createWaypoint(pos.getX(), pos.getY(), pos.getZ(), name, initials, isCurrentGoal);
             waypointSet.getClass().getMethod("add", waypointClass()).invoke(waypointSet, waypoint);
+
+            this.waypointById.put(entry.id(), waypoint);
             this.createdWaypoints.add(waypoint);
         }
     }
@@ -87,6 +169,7 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
     private void clearFromSet(Object set) throws ReflectiveOperationException {
         if (set == null) {
             this.createdWaypoints.clear();
+            this.waypointById.clear();
             return;
         }
         Method remove = set.getClass().getMethod("remove", waypointClass());
@@ -94,6 +177,7 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
             remove.invoke(set, waypoint);
         }
         this.createdWaypoints.clear();
+        this.waypointById.clear();
     }
 
     private String queueSignature(IPlayerContext ctx, List<GoalQueueEntry> goalQueue) {
@@ -102,10 +186,13 @@ abstract class ReflectiveGoalMinimapBridge implements GoalMinimapBridge {
             builder.append(ctx.world().dimension().location());
         }
         int firstIndex = firstSyncedIndex();
-        for (int i = firstIndex; i < goalQueue.size(); i++) {
-            BlockPos pos = goalPos(ctx, goalQueue.get(i).goal());
+        for (int queueIndex = 0; queueIndex < goalQueue.size(); queueIndex++) {
+            int signedIndex = firstIndex + queueIndex;
+            BlockPos pos = goalPos(ctx, goalQueue.get(queueIndex).goal());
             if (pos != null) {
-                builder.append('|').append(i).append(':').append(pos.getX()).append(',').append(pos.getY()).append(',').append(pos.getZ());
+                builder.append('|').append(signedIndex).append(':').append(pos.getX()).append(',').append(pos.getY()).append(',').append(pos.getZ());
+            } else {
+                builder.append('|').append(signedIndex).append(":null");
             }
         }
         return builder.toString();

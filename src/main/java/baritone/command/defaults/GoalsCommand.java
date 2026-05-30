@@ -56,7 +56,7 @@ public class GoalsCommand extends Command {
         ICustomGoalProcess goalProcess = baritone.getCustomGoalProcess();
         Action action = args.hasAny() ? Action.getByName(args.getString()) : Action.LIST;
         if (action == null) {
-            throw new CommandInvalidStateException("Unknown goals action");
+            throw new CommandInvalidStateException("无效的 goals 操作");
         }
         switch (action) {
             case LIST:
@@ -66,69 +66,69 @@ public class GoalsCommand extends Command {
             case ADD:
                 List<Goal> goals = GoalListParser.parse(baritone.getCommandManager(), args, ctx.playerFeet());
                 goalProcess.appendGoals(goals);
-                logDirect(String.format("Added %d goal%s", goals.size(), goals.size() == 1 ? "" : "s"));
+                logDirect(String.format("已添加 %d 个目标", goals.size()));
                 break;
             case REMOVE:
                 args.requireExactly(1);
                 GoalQueueEntry removed = goalProcess.removeGoal(resolveEntry(goalProcess, args.getString()).id());
                 if (removed == null) {
-                    throw new CommandInvalidStateException("Goal not found");
+                    throw new CommandInvalidStateException("未找到目标");
                 }
                 deletedGoals.addLast(removed);
-                logDirect(restoreComponent(label, "Goal removed. Click to undo."));
+                logDirect(restoreComponent(label, "已删除目标。点击撤销。"));
                 break;
             case CURRENT:
                 args.requireExactly(1);
                 if (!goalProcess.setCurrentGoal(resolveEntry(goalProcess, args.getString()).id())) {
-                    throw new CommandInvalidStateException("Goal not found");
+                    throw new CommandInvalidStateException("未找到目标");
                 }
-                logDirect("Current goal updated");
+                logDirect("已更新当前目标");
                 break;
             case MOVE:
                 args.requireExactly(2);
                 GoalQueueEntry entry = resolveEntry(goalProcess, args.getString());
                 int targetIndex = args.getAs(Integer.class) - 1;
                 if (!goalProcess.moveGoal(entry.id(), targetIndex)) {
-                    throw new CommandInvalidStateException("Target position is out of range");
+                    throw new CommandInvalidStateException("目标位置超出范围");
                 }
-                logDirect("Goal moved");
+                logDirect("目标已移动");
                 break;
             case UP:
                 args.requireExactly(1);
                 moveRelative(goalProcess, args.getString(), -1);
-                logDirect("Goal moved up");
+                logDirect("目标已上移");
                 break;
             case DOWN:
                 args.requireExactly(1);
                 moveRelative(goalProcess, args.getString(), 1);
-                logDirect("Goal moved down");
+                logDirect("目标已下移");
                 break;
             case CLEAR:
                 args.requireMax(0);
                 deletedGoals.addAll(goalProcess.getGoalQueue());
                 goalProcess.clearGoalQueue();
-                logDirect(restoreComponent(label, "Goals cleared. Click to restore the last removed goal."));
+                logDirect(restoreComponent(label, "已清空目标队列。点击恢复最近删除的目标。"));
                 break;
             case UNDO:
                 args.requireMax(0);
                 if (deletedGoals.isEmpty()) {
-                    throw new CommandInvalidStateException("There is no deleted goal to restore");
+                    throw new CommandInvalidStateException("没有可恢复的已删除目标");
                 }
                 goalProcess.appendGoal(deletedGoals.removeLast().goal());
-                logDirect("Restored goal");
+                logDirect("已恢复目标");
                 break;
             default:
-                throw new IllegalStateException("Unexpected action " + action);
+                throw new IllegalStateException("未处理的 goals 操作：" + action);
         }
     }
 
     private void listGoals(String label, ICustomGoalProcess goalProcess) {
         List<GoalQueueEntry> queue = goalProcess.getGoalQueue();
         if (queue.isEmpty()) {
-            logDirect("No goals queued");
+            logDirect("目标队列为空");
             return;
         }
-        logDirect(String.format("Goal queue (%d):", queue.size()));
+        logDirect(String.format("目标队列（%d）：", queue.size()));
         for (int i = 0; i < queue.size(); i++) {
             logDirect(goalComponent(label, queue.get(i), i, queue.size()));
         }
@@ -141,23 +141,23 @@ public class GoalsCommand extends Command {
         MutableComponent goal = Component.literal(entry.displayName());
         goal.setStyle(goal.getStyle()
                 .withColor(index == 0 ? ChatFormatting.WHITE : ChatFormatting.GRAY)
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to set current goal")))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("点击设为当前目标")))
                 .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, FORCE_COMMAND_PREFIX + label + " current id:" + entry.id())));
         line.append(goal);
 
-        line.append(action(label, " [current]", "current", entry.id(), "Set as current goal"));
-        line.append(action(label, " [delete]", "remove", entry.id(), "Delete this goal"));
+        line.append(action(label, " [设为当前]", "current", entry.id(), "设为当前目标"));
+        line.append(action(label, " [删除]", "remove", entry.id(), "删除该目标"));
         if (index > 0) {
-            line.append(action(label, " [up]", "up", entry.id(), "Move up"));
+            line.append(action(label, " [上移]", "up", entry.id(), "向上移动"));
         }
         if (index + 1 < size) {
-            line.append(action(label, " [down]", "down", entry.id(), "Move down"));
+            line.append(action(label, " [下移]", "down", entry.id(), "向下移动"));
         }
 
-        MutableComponent copy = Component.literal(" [copy]");
+        MutableComponent copy = Component.literal(" [复制]");
         copy.setStyle(copy.getStyle()
                 .withColor(ChatFormatting.AQUA)
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Copy goal command")))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("复制当前目标命令")))
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, Baritone.settings().prefix.value + "goal " + entry.displayName())));
         line.append(copy);
         return line;
@@ -182,12 +182,12 @@ public class GoalsCommand extends Command {
 
     private String roleName(int index) {
         if (index == 0) {
-            return "Current";
+            return "当前";
         }
         if (index == 1) {
-            return "Next";
+            return "下一个";
         }
-        return "Queued";
+        return "后续";
     }
 
     private GoalQueueEntry resolveEntry(ICustomGoalProcess goalProcess, String token) throws CommandException {
@@ -197,20 +197,20 @@ public class GoalsCommand extends Command {
             try {
                 id = Long.parseLong(token.substring(3));
             } catch (NumberFormatException ex) {
-                throw new CommandInvalidStateException("Goal id must be a number");
+                throw new CommandInvalidStateException("目标 id 必须是数字");
             }
             for (GoalQueueEntry entry : queue) {
                 if (entry.id() == id) {
                     return entry;
                 }
             }
-            throw new CommandInvalidStateException("Goal not found");
+            throw new CommandInvalidStateException("未找到目标");
         }
         int number;
         try {
             number = Integer.parseInt(token);
         } catch (NumberFormatException ex) {
-            throw new CommandInvalidStateException("Goal id or index must be a number");
+            throw new CommandInvalidStateException("目标 id 或序号必须是数字");
         }
         if (number >= 1 && number <= queue.size()) {
             return queue.get(number - 1);
@@ -220,7 +220,7 @@ public class GoalsCommand extends Command {
                 return entry;
             }
         }
-        throw new CommandInvalidStateException("Goal not found");
+        throw new CommandInvalidStateException("未找到目标");
     }
 
     private void moveRelative(ICustomGoalProcess goalProcess, String token, int offset) throws CommandException {
@@ -228,7 +228,7 @@ public class GoalsCommand extends Command {
         GoalQueueEntry entry = resolveEntry(goalProcess, token);
         int currentIndex = queue.indexOf(entry);
         if (!goalProcess.moveGoal(entry.id(), currentIndex + offset)) {
-            throw new CommandInvalidStateException("Target position is out of range");
+            throw new CommandInvalidStateException("目标位置超出范围");
         }
     }
 
@@ -246,24 +246,24 @@ public class GoalsCommand extends Command {
 
     @Override
     public String getShortDesc() {
-        return "Manage goal queue";
+        return "管理目标队列";
     }
 
     @Override
     public List<String> getLongDesc() {
         return Arrays.asList(
-                "The goals command manages Baritone's goal queue.",
+                "goals 用来管理 Baritone 的目标队列。",
                 "",
-                "Usage:",
-                "> goals [list] - List queued goals",
-                "> goals add <coords>[, <coords>...] - Add one or more goals",
-                "> goals current <index/id> - Set a queued goal as current",
-                "> goals remove <index/id> - Delete a queued goal",
-                "> goals move <index/id> <position> - Move a queued goal",
-                "> goals up <index/id> - Move a queued goal up",
-                "> goals down <index/id> - Move a queued goal down",
-                "> goals clear - Clear all queued goals",
-                "> goals undo - Restore the last deleted goal"
+                "用法：",
+                "> goals [list] - 查看目标队列",
+                "> goals add <坐标>[, <坐标>...] - 添加一个或多个目标",
+                "> goals current <序号/id> - 把指定目标设为当前目标",
+                "> goals remove <序号/id> - 删除指定目标",
+                "> goals move <序号/id> <位置> - 移动指定目标",
+                "> goals up <序号/id> - 将目标上移",
+                "> goals down <序号/id> - 将目标下移",
+                "> goals clear - 清空目标队列",
+                "> goals undo - 恢复最近删除的目标"
         );
     }
 

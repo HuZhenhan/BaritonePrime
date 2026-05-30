@@ -10,5 +10,11 @@ public final class NoopGoalMinimapBridge implements GoalMinimapBridge {
     public void sync(baritone.Baritone baritone, java.util.List<baritone.api.process.GoalQueueEntry> goalQueue) {}
 
     @Override
+    public void removeById(long id) {}
+
+    @Override
+    public void refresh(baritone.Baritone baritone, java.util.List<baritone.api.process.GoalQueueEntry> goalQueue) {}
+
+    @Override
     public void clear() {}
 }

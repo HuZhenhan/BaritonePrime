@@ -12,8 +12,11 @@ public final class XaeroDirectGoalMinimapBridge extends ReflectiveGoalMinimapBri
     }
 
     @Override
-    protected Object createWaypoint(int x, int y, int z, String name, String initials) throws ReflectiveOperationException {
-        Object color = enumValue("xaero.hud.minimap.waypoint.WaypointColor", "Baritone Goal".equals(name) ? "GREEN" : "DARK_GRAY", "GRAY", "BLACK");
+    protected Object createWaypoint(int x, int y, int z, String name, String initials, boolean isCurrentGoal)
+            throws ReflectiveOperationException {
+        Object color = isCurrentGoal
+                ? enumValue("xaero.hud.minimap.waypoint.WaypointColor", "GREEN", "LIME", "BRIGHT_GREEN", "LIGHT_GREEN", "DARK_GREEN")
+                : enumValue("xaero.hud.minimap.waypoint.WaypointColor", "DARK_GRAY", "GRAY", "BLACK");
         Object purpose = enumValue("xaero.hud.minimap.waypoint.WaypointPurpose", "NORMAL");
         try {
             return construct(

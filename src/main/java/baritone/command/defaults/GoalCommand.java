@@ -45,18 +45,18 @@ public class GoalCommand extends Command {
             args.requireMax(1);
             if (goalProcess.getGoal() != null) {
                 goalProcess.setGoal(null);
-                logDirect("Cleared goal");
+                logDirect("已清空当前目标");
             } else {
-                logDirect("There was no goal to clear");
+                logDirect("当前没有可清空的目标");
             }
         } else {
             BetterBlockPos origin = ctx.playerFeet();
             List<Goal> goals = GoalListParser.parse(baritone.getCommandManager(), args, origin);
             goalProcess.appendGoals(goals);
             if (goals.size() == 1) {
-                logDirect(String.format("Goal added: %s", goals.get(0)));
+                logDirect(String.format("已添加目标：%s", goals.get(0)));
             } else {
-                logDirect(String.format("Added %d goals", goals.size()));
+                logDirect(String.format("已添加 %d 个目标", goals.size()));
             }
         }
     }
@@ -84,22 +84,22 @@ public class GoalCommand extends Command {
 
     @Override
     public String getShortDesc() {
-        return "Set or clear the goal";
+        return "设置或清空目标";
     }
 
     @Override
     public List<String> getLongDesc() {
         return Arrays.asList(
-                "The goal command allows you to set or clear Baritone's goal.",
+                "goal 用来设置或清空 Baritone 的目标。",
                 "",
-                "Wherever a coordinate is expected, you can use ~ just like in regular Minecraft commands. Or, you can just use regular numbers.",
+                "坐标可以直接使用 ~，也可以使用普通数字。",
                 "",
-                "Usage:",
-                "> goal - Set the goal to your current position",
-                "> goal <reset/clear/none> - Erase the goal",
-                "> goal <y> - Set the goal to a Y level",
-                "> goal <x> <z> - Set the goal to an X,Z position",
-                "> goal <x> <y> <z> - Set the goal to an X,Y,Z position"
+                "用法：",
+                "> goal - 设置目标为当前位置",
+                "> goal <reset/clear/none> - 清空目标",
+                "> goal <y> - 设置目标为某个 Y 高度",
+                "> goal <x> <z> - 设置目标为 X,Z 坐标",
+                "> goal <x> <y> <z> - 设置目标为 X,Y,Z 坐标"
         );
     }
 }

@@ -10,11 +10,12 @@ public final class XaeroPlusGoalMinimapBridge extends ReflectiveGoalMinimapBridg
 
     @Override
     protected int firstSyncedIndex() {
-        return 1;
+        return 0;
     }
 
     @Override
-    protected Object createWaypoint(int x, int y, int z, String name, String initials) throws ReflectiveOperationException {
+    protected Object createWaypoint(int x, int y, int z, String name, String initials, boolean isCurrentGoal)
+            throws ReflectiveOperationException {
         Class<?> colorClass = Class.forName("xaero.hud.minimap.waypoint.WaypointColor");
         Method create = Class.forName("xaeroplus.feature.extensions.SyncedWaypoint").getMethod(
                 "create",
@@ -25,6 +26,9 @@ public final class XaeroPlusGoalMinimapBridge extends ReflectiveGoalMinimapBridg
                 String.class,
                 colorClass
         );
-        return create.invoke(null, x, y, z, name, initials, enumValue("xaero.hud.minimap.waypoint.WaypointColor", "DARK_GRAY", "GRAY", "BLACK"));
+        Object color = isCurrentGoal
+                ? enumValue("xaero.hud.minimap.waypoint.WaypointColor", "GREEN", "LIME", "BRIGHT_GREEN", "LIGHT_GREEN", "DARK_GREEN")
+                : enumValue("xaero.hud.minimap.waypoint.WaypointColor", "DARK_GRAY", "GRAY", "BLACK");
+        return create.invoke(null, x, y, z, name, initials, color);
     }
 }
