@@ -151,7 +151,15 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
             final BetterBlockPos last = this.behavior.pathManager.path.getLast();
             if (last != null && (ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 logDirect("Path complete, picking a nearby safe landing spot...");
-                BetterBlockPos landingSpot = findSafeLandingSpot(ctx.playerFeet());
+                BetterBlockPos landingSpot;
+                try {
+                    landingSpot = findSafeLandingSpot(ctx.playerFeet());
+                } catch (Throwable t) {
+                    // Elytra landing spot computation is best-effort. If it crashes (e.g. due to cached world state),
+                    // fall back to the existing behavior of continuing to orbit the last node.
+                    logDirect("elytra landing spot compute failed: " + t.getClass().getName() + ": " + t.getMessage());
+                    landingSpot = null;
+                }
                 // if this fails we will just keep orbiting the last node until we run out of rockets or the user intervenes
                 if (landingSpot != null) {
                     this.pathTo0(landingSpot, true);
