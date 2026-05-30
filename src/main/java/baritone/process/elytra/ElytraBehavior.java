@@ -800,7 +800,9 @@ public final class ElytraBehavior implements Helper {
     }
 
     private boolean tryNonNetherLandingDive() {
-        if (!this.landingMode || isNether()) {
+        // When flying in the non-nether dimension and we're high above the landing point,
+        // dive straight down quickly (no fireworks) instead of waiting for slow descent.
+        if (isNether()) {
             return false;
         }
         final List<BetterBlockPos> path = this.pathManager.getPath();
@@ -811,11 +813,15 @@ public final class ElytraBehavior implements Helper {
         final BetterBlockPos landingPos = path.get(path.size() - 1);
         final Vec3 landing = new Vec3(landingPos.x, landingPos.y, landingPos.z).add(0.5, 0.5, 0.5);
         final double heightAboveLanding = start.y - landing.y;
-        if (heightAboveLanding <= Baritone.settings().elytraNonNetherLandingSlowdownHeight.value) {
+        // User request: start缓缓下降 at ~30 blocks above the ground/landing point.
+        final double slowdownDistance = 30.0;
+        if (heightAboveLanding <= slowdownDistance) {
             return false;
         }
         final Vec3 horizontal = new Vec3(landing.x, start.y, landing.z);
-        if (start.distanceToSqr(horizontal) > 6 * 6 || !clearView(start, landing, false)) {
+        // Allow starting the dive once we're roughly within the requested XZ distance (up to ~250 blocks).
+        final double maxHorizontalDistance = 250.0;
+        if (start.distanceToSqr(horizontal) > maxHorizontalDistance * maxHorizontalDistance || !clearView(start, landing, false)) {
             return false;
         }
         baritone.getLookBehavior().updateTarget(new Rotation(ctx.playerRotations().getYaw(), 90), false);
@@ -850,6 +856,16 @@ public final class ElytraBehavior implements Helper {
         if (this.landingMode) {
             return;
         }
+
+        // User request: in non-nether high descent phase, don't use fireworks.
+        // We interpret "30格时开始缓缓下降" as "disable fireworks when >30 blocks above the current landing point Y".
+        if (!isNether() && goingTo != null) {
+            final double heightAboveLandingPoint = ctx.player().position().y - goingTo.y;
+            if (heightAboveLandingPoint > 30.0) {
+                return;
+            }
+        }
+
         final boolean forceInitialFirework = this.remainingFireworkTicks <= 0 && this.process.consumeVerticalTakeoffArmed();
         final boolean useOnDescend = !Baritone.settings().elytraConserveFireworks.value || ctx.player().position().y < goingTo.y + 5;
         final boolean suppressForNonNetherGlide = shouldSuppressFireworkForNonNetherGlide(goingTo, forceUseFirework, forceInitialFirework);

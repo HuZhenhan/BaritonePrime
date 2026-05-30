@@ -153,10 +153,12 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
             if (last != null && (ctx.player().position().distanceToSqr(last.getCenter()) < (48 * 48) || safetyLanding) && (!goingToLandingSpot || (safetyLanding && this.landingSpot == null))) {
                 // Don't search a new landing spot immediately; wait until the player is close enough to the ground.
                 // This prevents repeated heavy computations and log spam while still in high-altitude approach.
-                if (!safetyLanding && !isGroundWithin(100)) {
+                if (this.distanceToGround(ctx.playerFeet()) > 100) {
                     // Keep current behavior: continue orbiting the last node / approach path.
                     // (Do not compute a landing spot yet, and do not spam logs.)
                 } else {
+                    if (ctx.world().getGameTime() - lastSafeLandingSpotSearchGameTime >= 20) {
+                        lastSafeLandingSpotSearchGameTime = ctx.world().getGameTime();
                     logDirect("Path complete, picking a nearby safe landing spot...");
                     BetterBlockPos landingSpot;
                     try {
@@ -175,6 +177,7 @@ public class ElytraProcess extends BaritoneProcessHelper implements IBaritonePro
                     } else {
                         // Don't transition into landing mode if we can't compute a safe spot.
                         this.goingToLandingSpot = false;
+                    }
                     }
                 }
             }
