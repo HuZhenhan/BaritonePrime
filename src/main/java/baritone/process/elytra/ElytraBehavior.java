@@ -97,6 +97,9 @@ public final class ElytraBehavior implements Helper {
 
     public boolean landingMode;
 
+    // Used to avoid log spam: only print approach-descent trigger occasionally.
+    private long lastNonNetherApproachDescentLogAtMs = 0L;
+
     /**
      * The most recent minimum number of firework boost ticks, equivalent to {@code 10 * (1 + Flight)}
      * <p>
@@ -161,7 +164,20 @@ public final class ElytraBehavior implements Helper {
             return false;
         }
         final double horizontalDistanceSq = start.subtract(destination).multiply(1, 0, 1).lengthSqr();
-        return horizontalDistanceSq <= 96 * 96 && start.y > destination.y + 8;
+        // Start allowing descent earlier, so we don't "stick" to the high-altitude approach until we are almost on top of the target.
+        // Trigger when XZ is within ~250 blocks (user request).
+        final double maxHorizontalDistance = 250.0;
+        final boolean withinRange = horizontalDistanceSq <= maxHorizontalDistance * maxHorizontalDistance;
+        final boolean hasVerticalHeadroom = start.y > destination.y + 8;
+        final boolean should = withinRange && hasVerticalHeadroom;
+        if (should) {
+            final long now = System.currentTimeMillis();
+            if (now - this.lastNonNetherApproachDescentLogAtMs > 2000L) {
+                this.lastNonNetherApproachDescentLogAtMs = now;
+                logDirect("elytra approach descent: enable (xz<=250, startY>destY+8)");
+            }
+        }
+        return should;
     }
 
     private UnpackedSegment highAltitudeSegment(BlockPos src, BlockPos dst) {
