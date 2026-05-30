@@ -800,8 +800,8 @@ public final class ElytraBehavior implements Helper {
     }
 
     private boolean tryNonNetherLandingDive() {
-        // When flying in the non-nether dimension and we're high above the landing point,
-        // dive straight down quickly (no fireworks) instead of waiting for slow descent.
+        // Non-nether landing must prioritize losing altitude first. Do not let the normal solver
+        // trade vertical speed for staying close to the target column until we're near the ground.
         if (isNether()) {
             return false;
         }
@@ -813,17 +813,11 @@ public final class ElytraBehavior implements Helper {
         final BetterBlockPos landingPos = path.get(path.size() - 1);
         final Vec3 landing = new Vec3(landingPos.x, landingPos.y, landingPos.z).add(0.5, 0.5, 0.5);
         final double heightAboveLanding = start.y - landing.y;
-        // User request: start缓缓下降 at ~30 blocks above the ground/landing point.
         final double slowdownDistance = 30.0;
         if (heightAboveLanding <= slowdownDistance) {
             return false;
         }
-        final Vec3 horizontal = new Vec3(landing.x, start.y, landing.z);
-        // Allow starting the dive once we're roughly within the requested XZ distance (up to ~250 blocks).
-        final double maxHorizontalDistance = 250.0;
-        if (start.distanceToSqr(horizontal) > maxHorizontalDistance * maxHorizontalDistance || !clearView(start, landing, false)) {
-            return false;
-        }
+        this.aimPos = landingPos;
         baritone.getLookBehavior().updateTarget(new Rotation(ctx.playerRotations().getYaw(), 90), false);
         return true;
     }
